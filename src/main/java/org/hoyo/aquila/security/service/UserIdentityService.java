@@ -1,4 +1,4 @@
-package org.hoyo.aquila.security;
+package org.hoyo.aquila.security.service;
 
 import org.hoyo.aquila.security.configuration.AESUtil;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -6,23 +6,69 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.server.csrf.CsrfToken;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.stereotype.Service;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
 import java.util.Map;
 
-@RestController
-// Notice: @CrossOrigin is gone! Your SecurityConfig handles this dynamically now.
-public class AuthStatusController {
+@Service
+public class UserIdentityService {
 
-    @GetMapping("/api/auth/status")
-    public Mono<Map<String, Object>> authStatus(Mono<Authentication> authenticationMono) {
+    public String getEncryptedKey(OAuth2AuthenticationToken oauthToken) {
 
+        OAuth2User principal = oauthToken.getPrincipal();
+        String platform = oauthToken.getAuthorizedClientRegistrationId();
+        String platformUserId;
+
+        switch (platform) {
+            case "discord":
+                platformUserId = principal.getAttribute("id");
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported platform: " + platform);
+        }
+
+        try {
+            return AESUtil.encrypt(platformUserId) + ":" + platform;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed generating user key",e);
+        }
+    }
+
+    public Mono<String> getEncryptedKeyMono(Mono<Authentication> authenticationMono) {
+        return getOAuthToken(authenticationMono)
+                .flatMap(oauthToken -> {
+                    try {
+                        return Mono.just(getEncryptedKey(oauthToken));
+                    } catch (Exception e) {
+                        return Mono.error(e);
+                    }
+                });
+    }
+
+    public Mono<OAuth2AuthenticationToken> getOAuthToken(Mono<Authentication> authenticationMono) {
+        return authenticationMono
+                .filter(authentication ->
+                        authentication.isAuthenticated()
+                                && authentication instanceof OAuth2AuthenticationToken
+                )
+                .cast(OAuth2AuthenticationToken.class)
+                .switchIfEmpty(Mono.error(
+                        new IllegalStateException("User is not authenticated via OAuth2")
+                ));
+    }
+
+    public Mono<CsrfToken> getCsrf(ServerWebExchange exchange) {
+        // In WebFlux, the CsrfToken is extracted directly from the exchange attributes
+        Mono<CsrfToken> csrfToken = exchange.getAttribute(CsrfToken.class.getName());
+        return csrfToken != null ? csrfToken : Mono.empty();
+    }
+
+    public Mono<Map<String, Object>> getAuthObject(Mono<Authentication> authenticationMono){
         // We use map() to process the authentication object only if it exists
-        return authenticationMono.map(authentication -> {
+        return authenticationMono.<Map<String, Object>>handle((authentication, sink) -> {
             Map<String, Object> response = new HashMap<>();
 
             boolean isRealUser = authentication.isAuthenticated()
@@ -34,7 +80,12 @@ public class AuthStatusController {
                 String platform = oauthToken.getAuthorizedClientRegistrationId(); // e.g., "discord"
 
                 String avatarUrl = null;
-
+                if  (principal == null) {
+                    response.put("authenticated", false);
+                    sink.next(response);
+                    return;
+                }
+                // the platform is discord, so discord hardcodes are made within
                 if ("discord".equals(platform)) {
                     String userId = principal.getAttribute("id");
                     String avatarHash = principal.getAttribute("avatar");
@@ -58,12 +109,13 @@ public class AuthStatusController {
                         );
                     }
 
-                    String key = principal.getAttribute("username");
                     try {
-                        String encrypted_key = AESUtil.encrypt(key);
+                        String encrypted_key = getEncryptedKey(oauthToken);
                         response.put("ENCRYPTED_KEY", encrypted_key);
                     } catch (Exception e) {
-                        throw new RuntimeException(e);
+                        // :::::::::::::::: IMPORTANT ::::::::::::::::::::::::
+                        // failed to encrypt, this case needs to be studied
+                        response.put("authenticated", false);
                     }
                 }
 
@@ -76,15 +128,9 @@ public class AuthStatusController {
                 response.put("authenticated", false);
             }
 
-            return response;
+            sink.next(response);
 
         }).defaultIfEmpty(Map.of("authenticated", false)); // Fallback if no auth context exists
     }
 
-    @GetMapping("/csrf-token")
-    public Mono<CsrfToken> csrf(ServerWebExchange exchange) {
-        // In WebFlux, the CsrfToken is extracted directly from the exchange attributes
-        Mono<CsrfToken> csrfToken = exchange.getAttribute(CsrfToken.class.getName());
-        return csrfToken != null ? csrfToken : Mono.empty();
-    }
 }
