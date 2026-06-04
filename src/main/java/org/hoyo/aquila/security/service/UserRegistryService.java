@@ -31,48 +31,48 @@ public class UserRegistryService {
     /**
      * Initializes a user entry in the 'userInfo' hash upon successful Discord login.
      *
-     * @param discordId The unique identifier from Discord.
+     * @param ENCRYPTED_KEY The unique identifier from any future auth source.
      * @return Mono<Boolean> true if initialized successfully, false if they already existed.
      */
-    public Mono<Boolean> registerUserLogin(String discordId) {
+    public Mono<Boolean> registerUserLogin(String ENCRYPTED_KEY) {
         return redisTemplate.opsForHash()
-                .putIfAbsent(USER_INFO_HASH_KEY, discordId, "{}")
+                .putIfAbsent(USER_INFO_HASH_KEY, ENCRYPTED_KEY, "{}")
                 .doOnSuccess(wasInserted -> {
                     if (Boolean.TRUE.equals(wasInserted)) {
-                        log.info("User registry initialized for Discord ID: {}", discordId);
+                        log.info("User registry initialized for ENCRYPTED_KEY: {}", ENCRYPTED_KEY);
                     }
                 })
-                .doOnError(e -> log.error("Failed to register user login for {}: {}", discordId, e.getMessage()));
+                .doOnError(e -> log.error("Failed to register user login for {}: {}", ENCRYPTED_KEY, e.getMessage()));
     }
 
     /**
      * Links a validated UID to a specific game for a user.
      *
-     * @param discordId The unique identifier from Discord.
+     * @param ENCRYPTED_KEY The unique user identifier.
      * @param game The game identifier (e.g., "hsr", "genshin").
      * @param uid The game-specific UID.
      * @return Mono<Void>
      */
-    public Mono<Void> linkValidatedUid(String discordId, String game, String uid) {
-        return redisTemplate.opsForHash().get(USER_INFO_HASH_KEY, discordId)
+    public Mono<Void> linkValidatedUid(String ENCRYPTED_KEY, String game, String uid) {
+        return redisTemplate.opsForHash().get(USER_INFO_HASH_KEY, ENCRYPTED_KEY)
                 .map(Object::toString)
                 .defaultIfEmpty("{}") // FIX: Prevents the Mono from swallowing the execution if the user doesn't exist
                 .flatMap(this::parseJsonToMap)
                 .flatMap(data -> updateJsonWithUid(data, game, uid))
                 .flatMap(updatedJson -> redisTemplate.opsForHash()
-                        .put(USER_INFO_HASH_KEY, discordId, updatedJson))
-                .doOnSuccess(v -> log.info("Linked {} UID [{}] to user {}", game, uid, discordId))
+                        .put(USER_INFO_HASH_KEY, ENCRYPTED_KEY, updatedJson))
+                .doOnSuccess(v -> log.info("Linked {} UID [{}] to user {}", game, uid, ENCRYPTED_KEY))
                 .then();
     }
 
     /**
      * Retrieves all game UIDs associated with a user.
      *
-     * @param discordId The unique identifier from Discord.
+     * @param ENCRYPTED_KEY The unique identifier from Discord.
      * @return Mono<Map<String, Set<String>>> A map of game names to sets of UIDs.
      */
-    public Mono<Map<String, Set<String>>> getUserGameMappings(String discordId) {
-        return redisTemplate.opsForHash().get(USER_INFO_HASH_KEY, discordId)
+    public Mono<Map<String, Set<String>>> getUserGameMappings(String ENCRYPTED_KEY) {
+        return redisTemplate.opsForHash().get(USER_INFO_HASH_KEY, ENCRYPTED_KEY)
                 .map(Object::toString)
                 .flatMap(this::parseJsonToMap)
                 .defaultIfEmpty(new HashMap<>());
