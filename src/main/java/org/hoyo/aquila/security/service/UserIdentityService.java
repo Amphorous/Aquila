@@ -1,12 +1,14 @@
 package org.hoyo.aquila.security.service;
 
 import org.hoyo.aquila.security.configuration.AESUtil;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.server.csrf.CsrfToken;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -56,7 +58,10 @@ public class UserIdentityService {
                 )
                 .cast(OAuth2AuthenticationToken.class)
                 .switchIfEmpty(Mono.error(
-                        new IllegalStateException("User is not authenticated via OAuth2")
+                        new ResponseStatusException(
+                                HttpStatus.UNAUTHORIZED,
+                                "User is not authenticated via OAuth2"
+                        )
                 ));
     }
 
