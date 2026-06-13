@@ -10,6 +10,7 @@ import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler;
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
+import org.springframework.session.data.redis.config.annotation.web.server.EnableRedisWebSession;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -17,6 +18,11 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 
+// Backs reactive WebSessions with Redis instead of the default in-memory store - the
+// OAuth2Authentication and Discord OAuth2AuthorizedClient live inside the WebSession, so an
+// in-memory store (30 min default idle timeout, wiped on every restart) was silently logging
+// users out. 604_800s = 7 days, matching how long Discord access tokens stay usable.
+@EnableRedisWebSession(maxInactiveIntervalInSeconds = 604_800)
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
