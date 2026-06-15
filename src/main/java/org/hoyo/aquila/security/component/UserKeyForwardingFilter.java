@@ -11,28 +11,35 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
+
 @Component
 @RequiredArgsConstructor
 public class UserKeyForwardingFilter implements GlobalFilter {
 
     private final UserIdentityService userIdentityService;
+    private final GatewayRequestSigner gatewayRequestSigner;
 
-    // MAKE SURE YOU ALWAYS ADD "/protected" TO PATHS YOU WANNA PROTECT
+    // Forwards the authenticated user's key to downstream services, signed so they can
+    // verify the request actually went through this gateway. Downstream services that
+    // require this header (e.g. anything path-gated by "/protected") will reject
+    // requests where the header is missing, malformed, or fails signature/timestamp
+    // verification.
     @Override
     public @NonNull Mono<Void> filter(ServerWebExchange exchange, @NonNull GatewayFilterChain chain) {
-        String path = exchange.getRequest().getPath().value();
-        if (!path.contains("protected")) {
-            return chain.filter(exchange);
-        }
         return exchange.getPrincipal()
                 .cast(OAuth2AuthenticationToken.class)
                 .flatMap(auth -> {
 
                     String userKey = userIdentityService.getEncryptedKey(auth);
+                    String timestamp = String.valueOf(Instant.now().toEpochMilli());
+                    String signature = gatewayRequestSigner.sign(userKey, timestamp);
 
                     ServerHttpRequest request = exchange.getRequest()
                             .mutate()
                             .header("Aquila-User-Key", userKey)
+                            .header("Aquila-Request-Timestamp", timestamp)
+                            .header("Aquila-Signature", signature)
                             .build();
 
                     return chain.filter(
