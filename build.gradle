@@ -43,6 +43,11 @@ dependencies {
     // Source: https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-data-redis-reactive
     implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive:4.0.5")
 
+    // Backs reactive WebSessions (and therefore the OAuth2 login + authorized client) with Redis
+    // instead of the default in-memory store, so logins survive restarts and aren't capped at 30min
+    // Source: https://mvnrepository.com/artifact/org.springframework.session/spring-session-data-redis
+    implementation 'org.springframework.session:spring-session-data-redis'
+
     // Source: https://mvnrepository.com/artifact/tools.jackson.core/jackson-databind
     implementation("tools.jackson.core:jackson-databind:3.1.2")
 

@@ -1,6 +1,7 @@
 package org.hoyo.aquila.security.service;
 
-import org.hoyo.aquila.security.configuration.AESUtil;
+import lombok.RequiredArgsConstructor;
+import org.hoyo.aquila.security.configuration.UserKeyHasher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -16,7 +17,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
 public class UserIdentityService {
+
+    private final UserKeyHasher userKeyHasher;
 
     public String getEncryptedKey(OAuth2AuthenticationToken oauthToken) {
 
@@ -32,11 +36,7 @@ public class UserIdentityService {
                 throw new IllegalArgumentException("Unsupported platform: " + platform);
         }
 
-        try {
-            return AESUtil.encrypt(platformUserId) + ":" + platform;
-        } catch (Exception e) {
-            throw new RuntimeException("Failed generating user key",e);
-        }
+        return userKeyHasher.hash(platformUserId) + ":" + platform;
     }
 
     public Mono<String> getEncryptedKeyMono(Mono<Authentication> authenticationMono) {
