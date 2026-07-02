@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.web.server.csrf.CsrfToken;
+import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
@@ -26,6 +26,7 @@ public class AuthController {
     private final UserIdentityService userIdentityService;
     private final BinderService binderService;
     private final UserRegistryService userRegistryService;
+    private final CookieServerCsrfTokenRepository csrfTokenRepository;
 
     @GetMapping("/api/auth/status")
     public Mono<Map<String, Object>> authStatus(Mono<Authentication> authenticationMono) {
@@ -34,10 +35,15 @@ public class AuthController {
 
     @GetMapping("/csrf-token")
     public Mono<Map<String, String>> csrf(ServerWebExchange exchange) {
-        return userIdentityService.getCsrf(exchange)
+        // CsrfWebFilter only sets the exchange attribute for CSRF-protected methods (POST/PUT/…),
+        // never for GET — so exchange.getAttribute(CsrfToken.class.getName()) is always null here.
+        // Call the repository directly instead.
+        return csrfTokenRepository.loadToken(exchange)
+                .switchIfEmpty(Mono.defer(() ->
+                        csrfTokenRepository.generateToken(exchange)
+                                .flatMap(t -> csrfTokenRepository.saveToken(exchange, t).thenReturn(t))
+                ))
                 .map(token -> {
-                    // CsrfWebFilter's deferred saveToken() is not reliably called in this
-                    // Spring Cloud Gateway + forward-headers setup, so we set the cookie explicitly.
                     boolean secure = "https".equals(exchange.getRequest().getURI().getScheme());
                     exchange.getResponse().addCookie(
                             ResponseCookie.from("XSRF-TOKEN", token.getToken())
@@ -47,8 +53,7 @@ public class AuthController {
                                     .sameSite("Lax")
                                     .build()
                     );
-                    log.info("CSRF-DEBUG /csrf-token explicitly set XSRF-TOKEN cookie (secure={}): '{}'",
-                            secure, token.getToken());
+                    log.info("CSRF-DEBUG /csrf-token set cookie (secure={}): '{}'", secure, token.getToken());
                     return Map.of("token", token.getToken());
                 });
     }

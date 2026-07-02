@@ -48,7 +48,7 @@ public class SecurityConfig {
                 // CookieServerCsrfTokenRepository — the default XOR handler (Spring Security 6+)
                 // is incompatible with the Angular double-submit cookie pattern.
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRepository(csrfTokenRepository())
                         .csrfTokenRequestHandler(new ServerCsrfTokenRequestAttributeHandler())
                 )
 
@@ -76,6 +76,11 @@ public class SecurityConfig {
                 );
 
         return http.build();
+    }
+
+    @Bean
+    public CookieServerCsrfTokenRepository csrfTokenRepository() {
+        return CookieServerCsrfTokenRepository.withHttpOnlyFalse();
     }
 
     @Bean
