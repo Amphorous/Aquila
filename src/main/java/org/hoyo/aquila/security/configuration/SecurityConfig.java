@@ -54,7 +54,7 @@ public class SecurityConfig {
 
                 // authorizeExchange instead of authorizeHttpRequests
                 .authorizeExchange(auth -> auth
-                        .pathMatchers("/api/auth/status", "/csrf-token", "/logout").permitAll()
+                        .pathMatchers("/api/auth/status", "/api/csrf-token", "/logout").permitAll()
                         .anyExchange().permitAll()
                 )
 
