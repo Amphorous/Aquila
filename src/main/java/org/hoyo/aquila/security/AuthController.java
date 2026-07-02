@@ -33,7 +33,7 @@ public class AuthController {
         return userIdentityService.getAuthObject(authenticationMono);
     }
 
-    @GetMapping("/csrf-token")
+    @GetMapping("/api/csrf-token")
     public Mono<Map<String, String>> csrf(ServerWebExchange exchange) {
         // CsrfWebFilter only sets the exchange attribute for CSRF-protected methods (POST/PUT/…),
         // never for GET — so exchange.getAttribute(CsrfToken.class.getName()) is always null here.
