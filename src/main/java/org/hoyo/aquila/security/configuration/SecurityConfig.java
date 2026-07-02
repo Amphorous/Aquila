@@ -4,6 +4,7 @@ import org.hoyo.aquila.security.component.CustomOAuth2FailureHandler;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -11,6 +12,7 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler;
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
 import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import org.springframework.session.data.redis.config.annotation.web.server.EnableRedisWebSession;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
@@ -65,12 +67,16 @@ public class SecurityConfig {
                         .authenticationFailureHandler(failureHandler)
                 )
 
-                // Reactive Logout configuration
+                // Reactive Logout configuration — accept GET so CSRF is not required.
+                // POST logout + CSRF is unreliable behind a reverse proxy because the
+                // CookieServerCsrfTokenRepository sets Secure cookies (X-Forwarded-Proto=https)
+                // and Spring Security's XOR CSRF handler (default 6+) is incompatible with the
+                // cookie double-submit pattern. GET logout is safe here: the worst a CSRF attack
+                // can do is log the user out, and CORS already blocks cross-origin XHR.
                 .logout(logout -> logout
+                        .requiresLogout(ServerWebExchangeMatchers.pathMatchers(HttpMethod.GET, "/logout"))
                         .logoutSuccessHandler((webFilterExchange, authentication) -> {
-                            // Set HTTP 200 OK status on successful logout
                             webFilterExchange.getExchange().getResponse().setStatusCode(HttpStatus.OK);
-                            // Return an empty Mono to complete the reactive stream
                             return Mono.empty();
                         })
                 );
