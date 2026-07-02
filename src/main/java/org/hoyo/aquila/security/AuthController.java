@@ -6,6 +6,7 @@ import org.hoyo.aquila.security.service.UserIdentityService;
 import org.hoyo.aquila.security.service.UserRegistryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.server.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,10 +33,24 @@ public class AuthController {
     }
 
     @GetMapping("/csrf-token")
-    public Mono<CsrfToken> csrf(ServerWebExchange exchange) {
+    public Mono<Map<String, String>> csrf(ServerWebExchange exchange) {
         return userIdentityService.getCsrf(exchange)
-                .doOnNext(token -> log.info("CSRF-DEBUG /csrf-token returning token: '{}' | Set-Cookie will contain: '{}'",
-                        token.getToken(), token.getToken()));
+                .map(token -> {
+                    // CsrfWebFilter's deferred saveToken() is not reliably called in this
+                    // Spring Cloud Gateway + forward-headers setup, so we set the cookie explicitly.
+                    boolean secure = "https".equals(exchange.getRequest().getURI().getScheme());
+                    exchange.getResponse().addCookie(
+                            ResponseCookie.from("XSRF-TOKEN", token.getToken())
+                                    .httpOnly(false)
+                                    .secure(secure)
+                                    .path("/")
+                                    .sameSite("Lax")
+                                    .build()
+                    );
+                    log.info("CSRF-DEBUG /csrf-token explicitly set XSRF-TOKEN cookie (secure={}): '{}'",
+                            secure, token.getToken());
+                    return Map.of("token", token.getToken());
+                });
     }
 
     @GetMapping("api/binding-code/generate")
