@@ -10,6 +10,7 @@ import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler;
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository;
+import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler;
 import org.springframework.session.data.redis.config.annotation.web.server.EnableRedisWebSession;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
@@ -42,9 +43,13 @@ public class SecurityConfig {
                 // Configure reactive CORS
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-                // Configure reactive CSRF with cookie token repository
+                // Configure reactive CSRF with cookie token repository.
+                // ServerCsrfTokenRequestAttributeHandler (non-XOR) is required when using
+                // CookieServerCsrfTokenRepository — the default XOR handler (Spring Security 6+)
+                // is incompatible with the Angular double-submit cookie pattern.
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new ServerCsrfTokenRequestAttributeHandler())
                 )
 
                 // authorizeExchange instead of authorizeHttpRequests
