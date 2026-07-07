@@ -89,7 +89,7 @@ public class SecurityConfig {
 
         // Dynamically pull the frontend origin from application.properties
         configuration.setAllowedOrigins(List.of(appProperties.getFrontendUrl().getHsr()));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
 
